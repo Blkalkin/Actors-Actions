@@ -6,12 +6,15 @@ import traceback
 import random
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import weave
+import os
 
 from src.engines.actor_generation import ActorGenerator
 from src.engines.actor_enrichment import ActorEnricher
 from src.engines.world_engine import WorldEngine
 from src.engines.actor_action import ActorActionEngine
 from src.storage import get_storage
+from src.config import WANDB_API_KEY
 from src.models import (
     Actor,
     ActorGenerationRequest,
@@ -22,6 +25,14 @@ from src.models import (
     ActionResult,
     WorldUpdate
 )
+
+# Initialize Weave for LLM observability
+if WANDB_API_KEY:
+    os.environ["WANDB_API_KEY"] = WANDB_API_KEY
+    weave.init("actors-actions-simulation")
+    print("✅ Weave initialized for LLM observability")
+else:
+    print("⚠️  WANDB_API_KEY not found - Weave tracing disabled")
 
 app = FastAPI(
     title="Actors-Actions World Simulation API",

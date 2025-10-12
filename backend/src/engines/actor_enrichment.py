@@ -4,6 +4,7 @@ import re
 import time
 from openai import OpenAI
 from typing import Dict, Any
+import weave
 
 from src.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, ENRICHMENT_MODEL, ENRICHMENT_MAX_TOKENS
 from src.prompts import ACTOR_ENRICHMENT_SYSTEM, ACTOR_ENRICHMENT_USER
@@ -23,6 +24,7 @@ class ActorEnricher:
         self.model = ENRICHMENT_MODEL
         self.max_tokens = ENRICHMENT_MAX_TOKENS
     
+    @weave.op()
     def enrich(self, actor: Dict[str, Any]) -> Dict[str, str]:
         """
         Enrich an actor with detailed profile.

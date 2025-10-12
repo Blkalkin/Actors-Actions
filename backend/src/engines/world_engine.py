@@ -5,6 +5,7 @@ import time
 from openai import OpenAI
 from typing import Dict, Any, List
 from datetime import datetime
+import weave
 
 from src.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, WORLD_ENGINE_MODEL
 from src.prompts import WORLD_ENGINE_SYSTEM, WORLD_ENGINE_USER
@@ -24,6 +25,7 @@ class WorldEngine:
         )
         self.model = WORLD_ENGINE_MODEL
     
+    @weave.op()
     def process_round(self, simulation_id: str, round_number: int) -> Dict[str, Any]:
         """
         Process a round of the simulation using the action queue.

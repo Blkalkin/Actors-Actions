@@ -52,6 +52,7 @@ Create `backend/.env`:
 DAYTONA_API_KEY=dtn_xxxxx              # Get from https://app.daytona.io/dashboard/keys
 OPENROUTER_API_KEY=sk-or-v1-xxxxx      # Get from https://openrouter.ai/keys
 MONGODB_URI=mongodb+srv://...          # Get from https://cloud.mongodb.com
+WANDB_API_KEY=xxxxx                    # Get from https://wandb.ai/authorize (for Weave tracing)
 
 # Optional (customize models)
 ACTOR_GENERATION_MODEL=anthropic/claude-sonnet-4.5

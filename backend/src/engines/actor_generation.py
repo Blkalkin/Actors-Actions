@@ -5,6 +5,7 @@ import time
 import uuid
 from openai import OpenAI
 from typing import Dict, Any
+import weave
 
 from src.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, ACTOR_GENERATION_MODEL
 from src.prompts import ACTOR_GENERATION_SYSTEM, ACTOR_GENERATION_USER
@@ -23,6 +24,7 @@ class ActorGenerator:
         )
         self.model = ACTOR_GENERATION_MODEL
     
+    @weave.op()
     def generate(self, question: str) -> Dict[str, Any]:
         """
         Generate actors for a given question/situation.

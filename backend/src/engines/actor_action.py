@@ -5,6 +5,7 @@ import time
 from openai import OpenAI
 from typing import Dict, Any
 from datetime import datetime
+import weave
 
 from src.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, ACTOR_ACTION_MODEL
 from src.prompts import ACTOR_ACTION_SYSTEM, ACTOR_ACTION_USER
@@ -23,6 +24,7 @@ class ActorActionEngine:
         )
         self.model = ACTOR_ACTION_MODEL
     
+    @weave.op()
     def generate_action(
         self, 
         actor: Dict[str, Any],
