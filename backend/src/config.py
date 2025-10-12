@@ -14,7 +14,7 @@ MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "world_simulations")
 
 # Model Configuration
 ACTOR_GENERATION_MODEL = os.getenv("ACTOR_GENERATION_MODEL", "anthropic/claude-sonnet-4.5")
-ENRICHMENT_MODEL = os.getenv("ENRICHMENT_MODEL", "google/gemini-2.0-flash-exp:free")
+ENRICHMENT_MODEL = os.getenv("ENRICHMENT_MODEL", "google/gemini-2.5-flash")
 WORLD_ENGINE_MODEL = os.getenv("WORLD_ENGINE_MODEL", "anthropic/claude-sonnet-4.5")
 ACTOR_ACTION_MODEL = os.getenv("ACTOR_ACTION_MODEL", "qwen/qwen-2.5-72b-instruct")
 

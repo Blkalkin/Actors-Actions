@@ -10,7 +10,7 @@ import uuid
 
 class Actor(BaseModel):
     """Base actor model with static information."""
-    actor_id: str = None  # Unique ID assigned at creation
+    actor_id: Optional[str] = None  # Unique ID assigned at creation
     identifier: str
     research_query: str
     granularity: str
@@ -18,11 +18,15 @@ class Actor(BaseModel):
     role_in_simulation: str
     key_interactions: List[str]
     
-    # Enrichment fields (added after enrichment)
-    memory: Optional[str] = None
-    intrinsic_characteristics: Optional[str] = None
-    predispositions: Optional[str] = None
+    # Enrichment fields (added after enrichment) - can be strings or structured data
+    memory: Optional[Any] = None
+    intrinsic_characteristics: Optional[Any] = None
+    predispositions: Optional[Any] = None
     enriched: Optional[bool] = False
+    
+    class Config:
+        # Allow arbitrary types and validate assignment
+        arbitrary_types_allowed = True
     
     def __init__(self, **data):
         if 'actor_id' not in data or data['actor_id'] is None:
@@ -271,6 +275,16 @@ class Simulation(BaseModel):
         }
       ],
       
+      pending_messages: [
+        {
+          from_actor_id: string,
+          to_actor_id: string,
+          content: string,
+          sent_round: int,
+          deliver_round: int
+        }
+      ],
+      
       active_actor_ids: [string],
       eliminated_actor_ids: [string]
     }
@@ -291,6 +305,7 @@ class Simulation(BaseModel):
     actor_states: Dict[str, Dict[str, Dict[str, Any]]] = {}  # Round -> Actor ID -> ActorState
     action_schedule: Dict[str, List[Dict[str, Any]]] = {}  # Round -> [ScheduledAction]
     active_actions: List[Dict[str, Any]] = []  # [ActiveAction]
+    pending_messages: List[Dict[str, Any]] = []  # [PendingMessage]
     
     # Actor tracking
     active_actor_ids: List[str] = []
@@ -342,6 +357,7 @@ class SimulationResponse(BaseModel):
     current_round: int
     actors: List[Actor]  # Without private state
     rounds: List[Round] = []  # Public transcript
+    actor_states: Dict[str, Dict[str, Any]] = {}  # Round -> Actor ID -> ActorState
 
 
 class EnrichmentProgress(BaseModel):

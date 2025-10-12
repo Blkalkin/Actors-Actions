@@ -31,8 +31,13 @@ export const api = {
     return response.data
   },
 
-  async getTranscript(simulationId: string): Promise<any> {
-    const response = await client.get(`/api/simulations/${simulationId}/transcript`)
+  async getRounds(simulationId: string): Promise<any[]> {
+    const response = await client.get(`/api/simulations/${simulationId}/rounds`)
+    return response.data.rounds || []
+  },
+
+  async processRound(simulationId: string): Promise<any> {
+    const response = await client.post(`/api/simulations/${simulationId}/process-round`)
     return response.data
   },
 }

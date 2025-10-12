@@ -86,8 +86,22 @@ class ActorActionEngine:
                 action_decision = self._extract_json(response_text)
                 self._validate_action_decision(action_decision)
                 
-                print(f"✅ Action generated: {action_decision['action'][:60]}...")
-                print(f"   Execute: Round {action_decision['execute_round']}, Duration: {action_decision['duration']}")
+                # Log based on format (new format has 'actions' key, old has 'action')
+                if 'actions' in action_decision:
+                    # New format
+                    action_count = len(action_decision.get('actions', []))
+                    message_count = len(action_decision.get('messages', []))
+                    print(f"✅ Generated {action_count} action(s) and {message_count} message(s)")
+                    
+                    for i, action in enumerate(action_decision.get('actions', [])):
+                        print(f"   Action {i+1}: {action['action'][:60]}... (Round {action['execute_round']}, Duration: {action['duration']})")
+                    
+                    for i, msg in enumerate(action_decision.get('messages', [])):
+                        print(f"   Message {i+1} → {msg['to_actor_id']}: {msg['content'][:60]}...")
+                else:
+                    # Old format (backwards compatibility)
+                    print(f"✅ Action generated: {action_decision['action'][:60]}...")
+                    print(f"   Execute: Round {action_decision['execute_round']}, Duration: {action_decision['duration']}")
                 
                 return action_decision
                 
@@ -121,6 +135,16 @@ class ActorActionEngine:
         if not available_actions:
             available_actions = ["Any action appropriate to your role"]
         
+        # Format other actors for messaging
+        other_actors = actor_state.get('other_actors', [])
+        if other_actors:
+            other_actors_text = '\n'.join(
+                f"- {a['identifier']} ({a['role']}, {a['granularity']})"
+                for a in other_actors
+            )
+        else:
+            other_actors_text = "No other actors available for messaging."
+        
         prompt = ACTOR_ACTION_USER.format(
             question=question,
             time_unit=time_unit,
@@ -132,6 +156,7 @@ class ActorActionEngine:
             memory=actor.get('memory', 'Not yet enriched'),
             characteristics=actor.get('intrinsic_characteristics', 'Not yet enriched'),
             predispositions=actor.get('predispositions', 'Not yet enriched'),
+            other_actors=other_actors_text,
             world_state=actor_state.get('world_state_summary', 'Initial state'),
             observations=actor_state.get('observations', 'No specific observations yet'),
             action_history=action_history,
@@ -203,26 +228,67 @@ class ActorActionEngine:
             raise ValueError(f"Invalid JSON in actor action response: {e}")
     
     def _validate_action_decision(self, decision: Dict) -> None:
-        """Validate the action decision structure."""
-        required_fields = ['action', 'reasoning', 'execute_round', 'duration']
+        """Validate the action decision structure (supports new format with actions and messages arrays)."""
+        # Support both old format (single action) and new format (arrays)
+        # Old format: {"action": "...", "reasoning": "...", "execute_round": N, "duration": N}
+        # New format: {"actions": [...], "messages": [...]}
         
-        for field in required_fields:
-            if field not in decision:
-                raise ValueError(f"Missing required field in action decision: {field}")
-        
-        # Validate types
-        if not isinstance(decision['action'], str):
-            raise ValueError("Action must be a string")
-        if not isinstance(decision['reasoning'], str):
-            raise ValueError("Reasoning must be a string")
-        if not isinstance(decision['execute_round'], int):
-            raise ValueError("Execute_round must be an integer")
-        if not isinstance(decision['duration'], int):
-            raise ValueError("Duration must be an integer")
-        
-        # Validate values
-        if len(decision['action']) > 100:
-            raise ValueError("Action must be ≤100 characters")
-        if decision['duration'] < 1:
-            raise ValueError("Duration must be ≥1")
+        # Check if this is new format
+        if 'actions' in decision or 'messages' in decision:
+            # New format validation
+            if 'actions' not in decision:
+                decision['actions'] = []
+            if 'messages' not in decision:
+                decision['messages'] = []
+            
+            # Validate actions array
+            if not isinstance(decision['actions'], list):
+                raise ValueError("Actions must be an array")
+            
+            for i, action in enumerate(decision['actions']):
+                required = ['action', 'reasoning', 'execute_round', 'duration']
+                for field in required:
+                    if field not in action:
+                        raise ValueError(f"Action {i}: missing field '{field}'")
+                
+                if not isinstance(action['execute_round'], int) or action['execute_round'] < 0:
+                    raise ValueError(f"Action {i}: execute_round must be non-negative integer")
+                if not isinstance(action['duration'], int) or action['duration'] < 1:
+                    raise ValueError(f"Action {i}: duration must be ≥1")
+                if len(action['action']) > 100:
+                    raise ValueError(f"Action {i}: action must be ≤100 characters")
+            
+            # Validate messages array
+            if not isinstance(decision['messages'], list):
+                raise ValueError("Messages must be an array")
+            
+            for i, msg in enumerate(decision['messages']):
+                required = ['to_actor_id', 'content', 'reasoning']
+                for field in required:
+                    if field not in msg:
+                        raise ValueError(f"Message {i}: missing field '{field}'")
+                
+                if len(msg['content']) > 200:
+                    raise ValueError(f"Message {i}: content must be ≤200 characters")
+        else:
+            # Old format validation (backwards compatibility)
+            required_fields = ['action', 'reasoning', 'execute_round', 'duration']
+            
+            for field in required_fields:
+                if field not in decision:
+                    raise ValueError(f"Missing required field in action decision: {field}")
+            
+            if not isinstance(decision['action'], str):
+                raise ValueError("Action must be a string")
+            if not isinstance(decision['reasoning'], str):
+                raise ValueError("Reasoning must be a string")
+            if not isinstance(decision['execute_round'], int):
+                raise ValueError("Execute_round must be an integer")
+            if not isinstance(decision['duration'], int):
+                raise ValueError("Duration must be an integer")
+            
+            if len(decision['action']) > 100:
+                raise ValueError("Action must be ≤100 characters")
+            if decision['duration'] < 1:
+                raise ValueError("Duration must be ≥1")
 

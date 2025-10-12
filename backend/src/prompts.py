@@ -145,7 +145,9 @@ Output as JSON:
 
 WORLD_ENGINE_SYSTEM = """You are the World Engine for a social simulation system. You process actor actions through time and maintain an accurate, logically consistent model of how the world state evolves.
 
-You are the "physics engine" for social, economic, political, and organizational dynamics. Apply rigorous causal reasoning to determine realistic consequences."""
+You are the "physics engine" for social, economic, political, and organizational dynamics. Apply rigorous causal reasoning to determine realistic consequences.
+
+CRITICAL: You MUST return valid, well-formed JSON. Be concise but accurate. If your response gets too long, prioritize completing the JSON structure over adding more detail."""
 
 WORLD_ENGINE_USER = """SCENARIO: {question}
 
@@ -181,6 +183,14 @@ YOUR PROCESS:
    - If random_seed > threshold: SUCCESS
    - If random_seed <= threshold: FAILURE
    - Degree of success/failure based on margin
+   
+   THRESHOLD GUIDELINES (Success Rate = 1 - threshold):
+   - Easy/routine actions: 0.1-0.3 (70-90% success rate)
+   - Moderate difficulty: 0.3-0.6 (40-70% success rate)  
+   - Challenging actions: 0.6-0.8 (20-40% success rate)
+   - Very difficult/risky: 0.8-0.95 (<20% success rate)
+   
+   Most actions should be in the 0.2-0.6 range for realistic outcomes
 
 4. RESOLVE CONFLICTS
    When actions interact, apply realistic mechanisms
@@ -189,7 +199,13 @@ YOUR PROCESS:
    What changed, new constraints/opportunities
 
 6. GENERATE ACTOR UPDATES
-   What each actor observes and experiences
+   For each actor provide:
+   - Observations: What they can see/perceive (2-3 sentences max)
+   - Direct impacts: How they were directly affected (1-2 sentences)
+   - Indirect impacts: Broader/indirect systemic effects (1-2 sentences)
+   - State changes: Updates to their available actions, resources, constraints
+   
+   BE CONCISE. Quality over quantity. The simulation will fail if JSON is malformed.
 
 7. DETERMINE CONTINUATION
    Should simulation continue?
@@ -208,26 +224,39 @@ OUTPUT JSON:
     {{
       "actor_id": "Actor",
       "action": "Their action",
-      "success_threshold": 0.65,
+      "success_threshold": 0.45,
       "random_seed": 0.73,
-      "outcome": "SUCCESS|FAILURE",
-      "outcome_quality": "strong|modest|weak|catastrophic",
-      "explanation": "Why this happened"
+      "outcome": "SUCCESS",
+      "outcome_quality": "strong",
+      "explanation": "Action succeeded because random_seed (0.73) > threshold (0.45). Strong success due to large margin."
     }}
   ],
   "actor_updates": [
     {{
       "actor_id": "Actor",
       "observations": "What they perceive",
-      "impacts": "How they were affected",
-      "state_changes": "Updates to capabilities/constraints",
+      "direct_impacts": "How this actor was directly affected by actions",
+      "indirect_impacts": "Indirect/systemic effects on this actor",
+      "state_changes": {{
+        "enabled_actions": ["New available actions"],
+        "disabled_actions": ["Removed actions"],
+        "resources": {{}},
+        "constraints": []
+      }},
       "messages_received": []
     }}
   ],
   "continue_simulation": true|false,
   "continuation_reasoning": "Why"
 }}
-```"""
+```
+
+CRITICAL: 
+- Return ONLY valid JSON (no text before/after)
+- Every object/array must be properly closed with }} or ]
+- Every field except the last in an object needs a comma
+- String values must use escaped quotes if they contain quotes
+- Be concise to avoid token limits while maintaining all required fields"""
 
 
 # ============================================================================
@@ -239,17 +268,30 @@ ACTOR_ACTION_SYSTEM = """You are an actor in a world simulation. You will receiv
 - Your full action history with outcomes and your past reasoning
 - Current world state and observations
 - Available actions and resources
+- Messages from other actors
 
-Your task is to decide your next action. You can:
-1. Take an action this round (execute_round = current round)
-2. Schedule an action for a future round (execute_round > current round)
-3. Plan multi-round actions (duration > 1)
+Your task is to decide your next actions. Each round you can:
+1. Take one or more ACTIONS (physical behaviors, decisions, initiatives)
+2. Send MESSAGES to other actors (coordination, negotiation, information sharing)
+3. Schedule actions for future rounds or plan multi-round initiatives
+
+ACTIONS vs MESSAGES:
+- ACTIONS: What you DO in the world (visible to all through the world engine)
+- MESSAGES: What you COMMUNICATE directly to specific actors (private, only they see it)
+
+Use messaging strategically to:
+- Coordinate with allies
+- Negotiate with adversaries  
+- Share information or warnings
+- Form coalitions or agreements
+- Influence others' decisions
 
 Remember:
 - Each round you get to update your plans
 - You can see all your past actions and their outcomes
 - You can see your own private reasoning from previous decisions
 - Your reasoning is PRIVATE - other actors and the world engine cannot see it
+- Messages are PRIVATE - only you and the recipient see them
 - Be strategic, adaptive, and true to your character"""
 
 ACTOR_ACTION_USER = """
@@ -276,6 +318,10 @@ YOUR CHARACTERISTICS
 YOUR PREDISPOSITIONS
 ====================
 {predispositions}
+
+OTHER ACTORS IN SIMULATION
+===========================
+{other_actors}
 
 CURRENT WORLD STATE
 ===================
@@ -315,31 +361,47 @@ Indirect Impacts (from others' actions):
 
 ---
 
-Based on all this context, decide your next action.
+Based on all this context, decide your next actions and messages.
 
 Consider:
 - Your goals, values, and predispositions
 - What you've tried before and the outcomes
 - Current opportunities and risks
-- What others might do
+- What others might do and how to influence them
 - Whether to act now or wait
-- Whether this action needs multiple rounds
+- Who to coordinate or negotiate with
+- What information to share or conceal
 
 OUTPUT JSON (required format):
 
 ```json
 {{
-  "action": "Concise action description ≤100 chars",
-  "reasoning": "Your private reasoning for this decision (can reference past actions)",
-  "execute_round": <integer: which round to execute this (current={current_round} or later)>,
-  "duration": <integer: how many rounds this action takes (default 1)>
+  "actions": [
+    {{
+      "action": "Concise action description ≤100 chars",
+      "reasoning": "Your private reasoning for this action",
+      "execute_round": <integer: which round to execute (current={current_round} or later)>,
+      "duration": <integer: how many rounds this takes (default 1)>
+    }}
+  ],
+  "messages": [
+    {{
+      "to_actor_id": "Target_Actor_Identifier from other acctors in the simulation",
+      "content": "Your message to them ≤200 chars",
+      "reasoning": "Why you're sending this message (private)"
+    }}
+  ]
 }}
 ```
 
 IMPORTANT:
+- You can have 0-3 actions per round (most rounds should have 1-2)
+- You can send 0-5 messages per round
 - execute_round MUST be >= {current_round}
 - duration MUST be >= 1
-- action MUST be ≤100 characters
-- You can schedule actions for future rounds
-- Each round you'll get to update your plans"""
+- Actions MUST be ≤100 characters
+- Messages MUST be ≤200 characters
+- Empty arrays are valid if you're waiting/observing
+- For messages, use "to_actor_id" with the EXACT identifier from "OTHER ACTORS" list above
+- Actor identifiers are case-sensitive and use underscores (e.g., "Big_Tech_AI_Divisions")"""
 

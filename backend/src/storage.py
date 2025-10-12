@@ -1,5 +1,5 @@
 """MongoDB storage for simulations."""
-from pymongo import MongoClient
+from pymongo import MongoClient, DESCENDING
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -39,28 +39,34 @@ class SimulationStorage:
             raise
     
     def create_simulation(self, question: str, time_unit: str, 
-                         simulation_duration: int, actors: List[Dict]) -> str:
+                         simulation_duration: int, actors: List[Dict], 
+                         simulation_id: str = None) -> str:
         """
         Create a new simulation.
         
         Actors must have actor_id already assigned.
         
+        Args:
+            simulation_id: Optional ID (if not provided, generates new UUID)
+        
         Returns:
             simulation_id: Unique ID for this simulation
         """
-        simulation_id = str(uuid.uuid4())
+        if simulation_id is None:
+            simulation_id = str(uuid.uuid4())
         
         # Extract active actor IDs
         active_actor_ids = [actor['actor_id'] for actor in actors]
         
+        now = datetime.utcnow()
         document = {
             "simulation_id": simulation_id,
             "question": question,
             "time_unit": time_unit,
             "simulation_duration": simulation_duration,
             "status": "created",
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": now,  # Store as datetime object
+            "updated_at": now,
             "current_round": 0,
             "actors": actors,
             "rounds": [],
@@ -84,11 +90,11 @@ class SimulationStorage:
         )
     
     def list_simulations(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """List recent simulations."""
+        """List recent simulations (newest first)."""
         return list(self.simulations.find(
             {},
-            {"_id": 0, "actors": 0, "transcript": 0}  # Exclude large fields
-        ).sort("created_at", -1).limit(limit))
+            {"_id": 0, "actors": 0, "transcript": 0, "actor_states": 0, "action_schedule": 0, "active_actions": 0}
+        ).sort("created_at", DESCENDING).limit(limit))
     
     def update_simulation_status(self, simulation_id: str, status: str) -> None:
         """Update simulation status."""
@@ -97,13 +103,21 @@ class SimulationStorage:
             {
                 "$set": {
                     "status": status,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.utcnow()  # Already datetime object
                 }
             }
         )
     
+    def update_simulation(self, simulation_id: str, update_data: Dict[str, Any]) -> None:
+        """Update simulation with arbitrary data."""
+        update_data["updated_at"] = datetime.utcnow()
+        self.simulations.update_one(
+            {"simulation_id": simulation_id},
+            {"$set": update_data}
+        )
+    
     def enrich_actor(self, simulation_id: str, actor_id: str,
-                    memory: str, characteristics: str, predispositions: str) -> None:
+                    memory: Any, characteristics: Any, predispositions: Any) -> None:
         """Add enrichment data to an actor using actor_id."""
         self.simulations.update_one(
             {
@@ -116,7 +130,7 @@ class SimulationStorage:
                     "actors.$.intrinsic_characteristics": characteristics,
                     "actors.$.predispositions": predispositions,
                     "actors.$.enriched": True,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.utcnow()
                 }
             }
         )
@@ -124,7 +138,7 @@ class SimulationStorage:
     def add_round(self, simulation_id: str, round_data: Dict, 
                   actor_states: Dict[str, Dict]) -> None:
         """
-        Add a round to the simulation.
+        Add a round to the simulation and increment current_round.
         
         Args:
             simulation_id: The simulation ID
@@ -133,15 +147,16 @@ class SimulationStorage:
         """
         round_number = round_data['round_number']
         
+        # Atomically add round data and increment round counter
         self.simulations.update_one(
             {"simulation_id": simulation_id},
             {
                 "$push": {"rounds": round_data},
                 "$set": {
                     f"actor_states.{round_number}": actor_states,
-                    "current_round": round_number,
-                    "updated_at": datetime.utcnow().isoformat()
-                }
+                    "updated_at": datetime.utcnow()
+                },
+                "$inc": {"current_round": 1}  # Increment only on successful completion
             }
         )
     
@@ -153,7 +168,7 @@ class SimulationStorage:
             {
                 "$set": {
                     f"actor_states.{round_number}.{actor_id}": state_update,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.utcnow()
                 }
             }
         )
@@ -207,7 +222,7 @@ class SimulationStorage:
             {"simulation_id": simulation_id},
             {
                 "$push": {f"action_schedule.{execute_round}": scheduled_action},
-                "$set": {"updated_at": datetime.utcnow().isoformat()}
+                "$set": {"updated_at": datetime.utcnow()}
             }
         )
     
@@ -253,7 +268,61 @@ class SimulationStorage:
             {
                 "$set": {
                     f"action_schedule.{round_number}": actions,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+    
+    def add_pending_message(self, simulation_id: str, message: Dict) -> None:
+        """
+        Add a message to be delivered in a future round.
+        
+        Args:
+            simulation_id: The simulation ID
+            message: Dict with from_actor_id, to_actor_id, content, sent_round, deliver_round
+        """
+        self.simulations.update_one(
+            {"simulation_id": simulation_id},
+            {
+                "$push": {"pending_messages": message},
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+    
+    def get_messages_for_round(self, simulation_id: str, round_number: int) -> List[Dict]:
+        """Get all messages to be delivered in this round."""
+        sim = self.simulations.find_one(
+            {"simulation_id": simulation_id},
+            {"_id": 0, "pending_messages": 1}
+        )
+        
+        if not sim or "pending_messages" not in sim:
+            return []
+        
+        # Filter messages for this round
+        return [msg for msg in sim["pending_messages"] 
+                if msg.get("deliver_round") == round_number]
+    
+    def clear_delivered_messages(self, simulation_id: str, round_number: int) -> None:
+        """Remove messages that have been delivered in this round."""
+        sim = self.simulations.find_one(
+            {"simulation_id": simulation_id},
+            {"_id": 0, "pending_messages": 1}
+        )
+        
+        if not sim or "pending_messages" not in sim:
+            return
+        
+        # Keep only messages NOT for this round
+        remaining_messages = [msg for msg in sim["pending_messages"]
+                            if msg.get("deliver_round") != round_number]
+        
+        self.simulations.update_one(
+            {"simulation_id": simulation_id},
+            {
+                "$set": {
+                    "pending_messages": remaining_messages,
+                    "updated_at": datetime.utcnow()
                 }
             }
         )
@@ -264,7 +333,7 @@ class SimulationStorage:
             {"simulation_id": simulation_id},
             {
                 "$push": {"active_actions": active_action},
-                "$set": {"updated_at": datetime.utcnow().isoformat()}
+                "$set": {"updated_at": datetime.utcnow()}
             }
         )
     
@@ -288,7 +357,7 @@ class SimulationStorage:
                         "started_round": started_round
                     }
                 },
-                "$set": {"updated_at": datetime.utcnow().isoformat()}
+                "$set": {"updated_at": datetime.utcnow()}
             }
         )
     

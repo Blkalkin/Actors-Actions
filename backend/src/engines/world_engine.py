@@ -91,7 +91,7 @@ class WorldEngine:
                         {"role": "system", "content": WORLD_ENGINE_SYSTEM},
                         {"role": "user", "content": prompt}
                     ],
-                    max_tokens=8000,
+                    max_tokens=32000,  # Increased to prevent truncation
                     temperature=0.8,
                 )
                 
@@ -117,10 +117,18 @@ class WorldEngine:
             print(f"❌ All {MAX_RETRIES} attempts failed for world engine")
             raise last_error
         
+        # Get messages for this round (sent by actors in previous round)
+        pending_messages = storage.get_messages_for_round(simulation_id, round_number)
+        
         # Convert to storage format with my_actions history
         round_data, actor_states = self._convert_to_storage_format(
-            world_update, round_number, sim, scheduled_actions, prev_actor_states
+            world_update, round_number, sim, scheduled_actions, prev_actor_states, pending_messages
         )
+        
+        # Clear delivered messages
+        if pending_messages:
+            storage.clear_delivered_messages(simulation_id, round_number)
+            print(f"📬 Delivered {len(pending_messages)} message(s) to actors")
         
         # Update action statuses in queue
         for action_result in world_update['action_results']:
@@ -239,6 +247,39 @@ class WorldEngine:
             return json.loads(json_str)
         except json.JSONDecodeError as e:
             print(f"Failed to parse JSON: {json_str[:200]}...")
+            print(f"Error at position {e.pos}: {e.msg}")
+            
+            # Try to fix common JSON issues
+            try:
+                fixed_json = json_str
+                
+                # Remove trailing commas
+                fixed_json = fixed_json.replace(',]', ']').replace(',}', '}')
+                
+                # Fix missing commas between fields (common LLM error)
+                # Pattern: "field1": value\n  "field2" -> "field1": value,\n  "field2"
+                # Add comma after }\n" pattern
+                fixed_json = re.sub(r'\}\s*\n\s*"', '},\n  "', fixed_json)
+                # Add comma after ]\n" pattern  
+                fixed_json = re.sub(r'\]\s*\n\s*"', '],\n  "', fixed_json)
+                # Add comma after string value\n" pattern
+                fixed_json = re.sub(r'"\s*\n\s*"([^"]+)":\s*', '",\n  "\\1": ', fixed_json)
+                
+                # Try to add missing closing braces if truncated
+                open_braces = fixed_json.count('{') - fixed_json.count('}')
+                open_brackets = fixed_json.count('[') - fixed_json.count(']')
+                if open_braces > 0:
+                    fixed_json += '}' * open_braces
+                if open_brackets > 0:
+                    fixed_json += ']' * open_brackets
+                
+                result = json.loads(fixed_json)
+                print("✅ Fixed JSON automatically")
+                return result
+            except Exception as fix_error:
+                print(f"⚠️  Auto-fix failed: {fix_error}")
+                pass
+            
             raise ValueError(f"Invalid JSON in world engine response: {e}")
     
     def _validate_world_update(self, update: Dict, scheduled_actions: List[Dict]) -> None:
@@ -261,7 +302,7 @@ class WorldEngine:
     
     def _convert_to_storage_format(self, world_update: Dict, round_number: int,
                                    sim: Dict, scheduled_actions: List[Dict],
-                                   prev_actor_states: Dict) -> tuple:
+                                   prev_actor_states: Dict, pending_messages: List[Dict] = None) -> tuple:
         """Convert world engine output to storage format with my_actions history."""
         # Public round data
         round_data = {
@@ -314,19 +355,38 @@ class WorldEngine:
             if actor_id in action_items_by_actor:
                 my_actions.append(action_items_by_actor[actor_id])
             
+            # Handle state_changes - could be dict or string
+            state_changes = update.get('state_changes', {})
+            if not isinstance(state_changes, dict):
+                state_changes = {}
+            
+            # Get messages for this actor
+            actor_messages = []
+            if pending_messages:
+                actor_messages = [
+                    {
+                        "from_actor_id": msg['from_actor_id'],
+                        "from_actor_identifier": msg.get('from_actor_identifier', ''),
+                        "content": msg['content'],
+                        "sent_round": msg['sent_round']
+                    }
+                    for msg in pending_messages
+                    if msg['to_actor_id'] == actor_id
+                ]
+            
             actor_states[actor_id] = {
                 "actor_id": actor_id,
                 "round_number": round_number,
                 "observations": update.get('observations', ''),
                 "world_state_summary": world_update['world_state_update'].get('summary', ''),
-                "available_actions": update.get('state_changes', {}).get('enabled_actions', []),
-                "disabled_actions": update.get('state_changes', {}).get('disabled_actions', []),
-                "resources": update.get('state_changes', {}).get('resources', {}),
-                "constraints": update.get('state_changes', {}).get('constraints', []),
-                "messages_received": update.get('messages_received', []),
-                "my_actions": my_actions,  # Full action history with outcomes
+                "available_actions": state_changes.get('enabled_actions', []),
+                "disabled_actions": state_changes.get('disabled_actions', []),
+                "resources": state_changes.get('resources', {}),
+                "constraints": state_changes.get('constraints', []),
+                "messages_received": actor_messages,
+                "my_actions": my_actions,
                 "direct_impacts": update.get('direct_impacts', ''),
-                "indirect_impacts": update.get('impacts', '')
+                "indirect_impacts": update.get('indirect_impacts', '')
             }
         
         return round_data, actor_states

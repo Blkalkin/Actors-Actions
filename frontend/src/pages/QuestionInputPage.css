@@ -1,10 +1,30 @@
 .question-input-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: #fafafa;
   padding: 2rem;
+  padding-top: 25vh;
+  position: relative;
+}
+
+.nav-button {
+  position: absolute;
+  top: 2rem;
+  left: 2rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border: 1px solid #ddd;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-button:hover {
+  border-color: #000;
+  color: #000;
 }
 
 .question-input-container {
@@ -57,18 +77,18 @@ form {
   position: absolute;
   right: 0;
   top: 50%;
-  transform: translateY(-50%);
   width: 2.5rem;
   height: 2.5rem;
   border: none;
   background: transparent;
   color: #000;
-  font-size: 1.5rem;
+  font-size: 2rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.15s ease;
+  margin-top: -1.25rem; /* Manual centering instead of transform */
 }
 
 .submit-button:hover:not(:disabled) {
@@ -81,13 +101,15 @@ form {
 }
 
 @keyframes spin {
-  to {
-    transform: translateY(-50%) rotate(360deg);
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
 
 .submit-button.loading {
   animation: spin 1s linear infinite;
-  transform-origin: center;
 }
 
