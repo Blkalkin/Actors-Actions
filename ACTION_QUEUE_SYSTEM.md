@@ -1,5 +1,7 @@
 # Action Queue System Documentation
 
+> **Note:** This document provides a deep dive into action scheduling patterns. For general backend architecture, see [BACKEND_DESIGN.md](BACKEND_DESIGN.md).
+
 ## Overview
 
 The Action Queue System enables sophisticated multi-round action planning where actors can:

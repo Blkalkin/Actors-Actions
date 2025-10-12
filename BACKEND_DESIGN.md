@@ -395,16 +395,22 @@ def parse_llm_json(response_text: str) -> dict:
 
 ```mermaid
 sequenceDiagram
-    Actor A->>Storage: Send message (Round 2)
+    participant ActorA as Actor A
+    participant Storage
+    participant WorldEngine as World Engine
+    participant ActorB as Actor B
+    participant Action as Actor Action
+    
+    ActorA->>Storage: Send message (Round 2)
     Note over Storage: pending_messages: [{to: B, deliver_round: 3}]
     
-    World Engine->>Storage: Get messages for Round 3
-    Storage-->>World Engine: Messages for Actor B
-    World Engine->>Storage: Add to actor_states[3][B].messages_received
-    World Engine->>Storage: Clear delivered messages
+    WorldEngine->>Storage: Get messages for Round 3
+    Storage-->>WorldEngine: Messages for Actor B
+    WorldEngine->>Storage: Add to actor_states[3][B].messages_received
+    WorldEngine->>Storage: Clear delivered messages
     
-    Actor B->>Actor Action: Receives messages in Round 3
-    Note over Actor B: Can respond or take action based on message
+    ActorB->>Action: Receives messages in Round 3
+    Note over ActorB: Can respond or take action based on message
 ```
 
 ### Schema
