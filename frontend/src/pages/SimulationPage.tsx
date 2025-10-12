@@ -18,6 +18,7 @@ interface FlyingMessage {
   fromActorId: string
   toActorId: string
   startTime: number
+  key: string  // Unique key to force re-render
 }
 
 export default function SimulationPage() {
@@ -26,7 +27,8 @@ export default function SimulationPage() {
   
   const [simulation, setSimulation] = useState<Simulation | null>(null)
   const [rounds, setRounds] = useState<Round[]>([])
-  const [currentRound, setCurrentRound] = useState(0)
+  const [_currentRound, setCurrentRound] = useState(0) // Backend simulation progress (not displayed)
+  const [viewingRound, setViewingRound] = useState(0) // For replay mode and display
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [selectedActor, setSelectedActor] = useState<Actor | null>(null)
@@ -60,13 +62,28 @@ export default function SimulationPage() {
       const positions = generateActorPositions(simData.actors)
       setActorPositions(positions)
       
-      // Trigger message animations for the latest COMPLETED round (after page refresh/load)
-      // current_round is the round being processed, so look at current_round - 1 for completed data
-      const latestCompletedRound = simData.current_round > 0 ? simData.current_round - 1 : 0
-      if (latestCompletedRound > 0 && simData.actor_states && simData.actor_states[String(latestCompletedRound)]) {
-        setTimeout(() => {
-          triggerMessageAnimationsWithData(simData, positions, latestCompletedRound)
-        }, 1500) // Delay to let shapes settle before birds fly
+      // Set initial viewing round
+      if (simData.status === 'completed') {
+        // For completed simulations, start viewing from round 1
+        const initialRound = roundsData.length > 0 ? 1 : 0
+        setViewingRound(initialRound)
+        
+        // Trigger message animations for the initial round
+        if (initialRound > 0 && simData.actor_states && simData.actor_states[String(initialRound)]) {
+          setTimeout(() => {
+            triggerMessageAnimationsWithData(simData, positions, initialRound)
+          }, 1500)
+        }
+      } else {
+        // For running simulations, show the latest completed round
+        const latestCompletedRound = simData.current_round > 0 ? simData.current_round - 1 : 0
+        setViewingRound(latestCompletedRound)
+        
+        if (latestCompletedRound > 0 && simData.actor_states && simData.actor_states[String(latestCompletedRound)]) {
+          setTimeout(() => {
+            triggerMessageAnimationsWithData(simData, positions, latestCompletedRound)
+          }, 1500) // Delay to let shapes settle before birds fly
+        }
       }
       
       console.log('✅ Setting loading to false')
@@ -139,6 +156,33 @@ export default function SimulationPage() {
     }
   }
 
+  const handlePreviousRound = () => {
+    if (!simulation || viewingRound <= 1) return
+    
+    const newRound = viewingRound - 1
+    setViewingRound(newRound)
+    
+    // Trigger message animations for this round
+    if (simulation.actor_states && simulation.actor_states[String(newRound)]) {
+      triggerMessageAnimationsWithData(simulation, actorPositions, newRound)
+    }
+  }
+
+  const handleNextReplayRound = () => {
+    if (!simulation || !rounds.length) return
+    
+    const maxRound = rounds.length
+    if (viewingRound >= maxRound) return
+    
+    const newRound = viewingRound + 1
+    setViewingRound(newRound)
+    
+    // Trigger message animations for this round
+    if (simulation.actor_states && simulation.actor_states[String(newRound)]) {
+      triggerMessageAnimationsWithData(simulation, actorPositions, newRound)
+    }
+  }
+
   const triggerMessageAnimationsWithData = (simData: Simulation, positions: ActorPosition[], roundNumber: number) => {
     console.log('🐦 triggerMessageAnimationsWithData called for round:', roundNumber)
     
@@ -162,11 +206,13 @@ export default function SimulationPage() {
     Object.entries(actorStates).forEach(([toActorId, state]: [string, any]) => {
       const messages = state.messages_received || []
       messages.forEach((msg: any) => {
+        const timestamp = Date.now()
         newBirds.push({
-          id: `${roundNumber}-msg-${messageCount}-${Date.now()}`,
+          id: `${roundNumber}-msg-${messageCount}-${timestamp}`,
           fromActorId: msg.from_actor_id,
           toActorId: toActorId,
-          startTime: Date.now()
+          startTime: timestamp,
+          key: `bird-${roundNumber}-${messageCount}-${timestamp}-${Math.random()}`
         })
         messageCount++
       })
@@ -209,7 +255,7 @@ export default function SimulationPage() {
     const midY = (fromY + toY) / 2 - 10 // Curve upward
     
     return (
-      <g key={message.id}>
+      <g key={message.key}>
         {/* Animated "v" bird flying from sender to receiver */}
         <text fontSize="3" fill="#4CAF50" fontWeight="normal" fontFamily="monospace">
           <animateMotion
@@ -277,7 +323,9 @@ export default function SimulationPage() {
     )
   }
 
-  const latestRound = rounds[rounds.length - 1]
+  // Get the round being viewed (for replay or current viewing)
+  const displayRound = rounds.find(r => r.round_number === viewingRound) || rounds[rounds.length - 1]
+  const isCompleted = simulation.status === 'completed'
 
   return (
     <div className="simulation-page">
@@ -291,7 +339,10 @@ export default function SimulationPage() {
           <div className="canvas-header">
             <h2>{simulation.question}</h2>
             <div className="round-display">
-              {simulation.time_unit} {currentRound}
+              {simulation.time_unit} {viewingRound}
+              {isCompleted && <span style={{ fontSize: '0.8em', marginLeft: '10px', opacity: 0.7 }}>
+                (Replay Mode)
+              </span>}
             </div>
           </div>
           
@@ -302,6 +353,7 @@ export default function SimulationPage() {
             
             {/* SVG overlay for message animations */}
             <svg 
+              key={`svg-animations-round-${viewingRound}`}
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
               style={{
@@ -327,28 +379,28 @@ export default function SimulationPage() {
           </div>
 
           <div className="world-content">
-            {latestRound ? (
+            {displayRound ? (
               <>
                 <div className="world-summary">
                   <h4>Summary</h4>
-                  <p>{latestRound.world_state_summary}</p>
+                  <p>{displayRound.world_state_summary}</p>
                 </div>
 
-                {latestRound.key_changes && latestRound.key_changes.length > 0 && (
+                {displayRound.key_changes && displayRound.key_changes.length > 0 && (
                   <div className="world-section">
                     <h4>Key Changes</h4>
                     <ul>
-                      {latestRound.key_changes.map((change, i) => (
+                      {displayRound.key_changes.map((change, i) => (
                         <li key={i}>{change}</li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {latestRound.action_results && latestRound.action_results.length > 0 && (
+                {displayRound.action_results && displayRound.action_results.length > 0 && (
                   <div className="world-section">
                     <h4>Action Results</h4>
-                    {latestRound.action_results.map((result, i) => {
+                    {displayRound.action_results.map((result, i) => {
                       const actor = simulation?.actors.find(a => a.actor_id === result.actor_id)
                       const actorName = actor?.identifier || result.actor_id
                       return (
@@ -369,22 +421,54 @@ export default function SimulationPage() {
           </div>
 
           <div className="panel-footer">
-            {simulation.status === 'completed' ? (
-              <div style={{
-                padding: '1rem',
-                background: '#e8f5e9',
-                border: '2px solid #4caf50',
-                borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🏁</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#2e7d32', marginBottom: '0.25rem' }}>
-                  Simulation Complete
+            {isCompleted ? (
+              <>
+                <div style={{
+                  padding: '1rem',
+                  background: '#e8f5e9',
+                  border: '2px solid #4caf50',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  marginBottom: '1rem'
+                }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🏁</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#2e7d32', marginBottom: '0.25rem' }}>
+                    Simulation Complete
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#558b2f' }}>
+                    Use controls below to replay
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#558b2f' }}>
-                  {latestRound?.continuation_reasoning || 'The simulation has reached its natural conclusion.'}
+                
+                {/* Replay Controls */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      className="next-button" 
+                      onClick={handlePreviousRound}
+                      disabled={viewingRound <= 1}
+                      style={{ flex: 1 }}
+                    >
+                      ← Previous
+                    </button>
+                    <button 
+                      className="next-button" 
+                      onClick={handleNextReplayRound}
+                      disabled={viewingRound >= rounds.length}
+                      style={{ flex: 1 }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    fontSize: '0.9rem',
+                    opacity: 0.7 
+                  }}>
+                    Round {viewingRound} of {rounds.length}
+                  </div>
                 </div>
-              </div>
+              </>
             ) : (
               <button
                 className="next-button"
@@ -415,12 +499,12 @@ export default function SimulationPage() {
               </div>
 
               {(() => {
-                const roundKey = latestRound?.round_number !== undefined ? String(latestRound.round_number) : null
+                const roundKey = String(viewingRound)
                 
                 console.log('🎭 Modal Debug:', {
                   selectedActorId: selectedActor.actor_id,
                   selectedActorIdentifier: selectedActor.identifier,
-                  latestRoundNumber: latestRound?.round_number,
+                  viewingRound,
                   roundKey,
                   availableRoundKeys: simulation.actor_states ? Object.keys(simulation.actor_states) : [],
                   actorIdsInRound: roundKey && simulation.actor_states?.[roundKey] 
@@ -428,8 +512,8 @@ export default function SimulationPage() {
                     : []
                 })
                 
-                // Get current action from latest round
-                const latestActionResult = latestRound?.action_results?.find(
+                // Get current action from the viewing round
+                const currentActionResult = displayRound?.action_results?.find(
                   r => r.actor_id === selectedActor.actor_id
                 )
                 
@@ -447,15 +531,15 @@ export default function SimulationPage() {
                 
                 const latestAction = actorState?.my_actions?.[actorState.my_actions.length - 1]
                 
-                if (latestActionResult || actorState) {
+                if (currentActionResult || actorState) {
                   return (
                     <>
-                      {latestActionResult && (
+                      {currentActionResult && (
                         <div className="detail-section">
-                          <h4>Latest Action ({simulation.time_unit} {latestRound?.round_number !== undefined ? latestRound.round_number : 0})</h4>
-                          <p><strong>{latestActionResult.action}</strong></p>
+                          <h4>Action ({simulation.time_unit} {viewingRound})</h4>
+                          <p><strong>{currentActionResult.action}</strong></p>
                           <p style={{ fontSize: '0.8rem', color: '#999', marginTop: '0.25rem' }}>
-                            {latestActionResult.outcome}
+                            {currentActionResult.outcome}
                           </p>
                         </div>
                       )}
