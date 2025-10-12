@@ -6,7 +6,27 @@ LLM-powered multi-agent simulations where autonomous actors make decisions, send
 
 ## Quick Start
 
-### Backend
+### 🚀 Deploy to Daytona (Easiest!)
+
+```bash
+# Option 1: Using virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements-deploy.txt
+python deploy_to_daytona.py
+
+# Option 2: Using --user flag
+pip install --user -r requirements-deploy.txt
+python deploy_to_daytona.py
+```
+
+Make sure DAYTONA_API_KEY is in your `backend/.env` file
+
+Get isolated sandbox with preview URLs in 3-5 minutes! Get your Daytona API key from [app.daytona.io/dashboard/keys](https://app.daytona.io/dashboard/keys)
+
+### Local Development
+
+#### Backend
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -14,7 +34,7 @@ cp .env.example .env  # Add your API keys
 python run_server.py  # → http://localhost:8000
 ```
 
-### Frontend
+#### Frontend
 ```bash
 cd frontend
 npm install
@@ -29,6 +49,7 @@ Create `backend/.env`:
 
 ```bash
 # Required
+DAYTONA_API_KEY=dtn_xxxxx              # Get from https://app.daytona.io/dashboard/keys
 OPENROUTER_API_KEY=sk-or-v1-xxxxx      # Get from https://openrouter.ai/keys
 MONGODB_URI=mongodb+srv://...          # Get from https://cloud.mongodb.com
 

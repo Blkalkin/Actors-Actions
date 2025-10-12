@@ -1,0 +1,35 @@
+# Daytona deployment Dockerfile for Actors-Actions
+FROM python:3.12-slim
+
+# Install Node.js 20
+RUN apt-get update && \
+    apt-get install -y curl git ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    node --version && npm --version && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /home/daytona/actors-actions
+
+# Copy backend requirements and install Python dependencies
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# Copy frontend package.json and install Node dependencies
+COPY frontend/package*.json frontend/
+RUN cd frontend && npm install
+
+# Copy the rest of the application
+COPY . .
+
+# Build frontend
+RUN cd frontend && npm run build
+
+# Expose ports
+EXPOSE 8000 5173
+
+# Keep container running
+CMD ["sleep", "infinity"]
+
