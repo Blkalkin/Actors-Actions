@@ -89,6 +89,7 @@ def main():
                 "ACTOR_ACTION_MODEL": os.getenv("ACTOR_ACTION_MODEL", "qwen/qwen-2.5-72b-instruct"),
             },
             auto_stop_interval=0,  # Keep running
+            public=True,  # Make preview URLs publicly accessible
         )
     )
     

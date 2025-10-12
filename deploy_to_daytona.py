@@ -80,6 +80,7 @@ def main():
                 "WANDB_API_KEY": wandb_key,
             },
             auto_stop_interval=0,  # Keep running indefinitely
+            public=True,  # Make preview URLs publicly accessible
         ),
         timeout=0,  # Wait for image build
         on_snapshot_create_logs=print,
