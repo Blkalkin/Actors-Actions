@@ -16,10 +16,10 @@ graph TB
     Pool --> AA[Actor Action Engine]
     Pool --> WE[World Engine]
     
-    AG --> LLM[OpenAI GPT-4]
-    AE --> LLM
-    AA --> LLM
-    WE --> LLM
+    AG --> LLM1[Claude Sonnet 4.5<br/>via OpenRouter]
+    AE --> LLM2[Gemini 2.5 Flash<br/>via OpenRouter]
+    AA --> LLM3[Qwen 2.5 72B<br/>via OpenRouter]
+    WE --> LLM1
     
     AG --> DB[(MongoDB)]
     AE --> DB
@@ -31,13 +31,18 @@ graph TB
     DB --> A[scheduled_actions]
     
     style Pool fill:#f9f,stroke:#333,stroke-width:2px
-    style LLM fill:#ff9,stroke:#333,stroke-width:2px
+    style LLM1 fill:#ff9,stroke:#333,stroke-width:2px
+    style LLM2 fill:#ff9,stroke:#333,stroke-width:2px
+    style LLM3 fill:#ff9,stroke:#333,stroke-width:2px
     style DB fill:#9cf,stroke:#333,stroke-width:2px
 ```
 
 **Key Design Decisions:**
 - **Async-First**: All I/O operations run in ThreadPoolExecutor to avoid blocking FastAPI event loop
-- **LLM-Powered**: GPT-4 drives all simulation logic (actor decisions, world updates, outcomes)
+- **Multi-Model LLM**: Different specialized models via OpenRouter for optimal cost/performance:
+  - **Claude Sonnet 4.5**: Actor generation & world processing (high reasoning)
+  - **Gemini 2.0 Flash**: Actor enrichment (fast, cost-effective)
+  - **Qwen 2.5 72B**: Actor actions (efficient for repetitive tasks)
 - **MongoDB**: Flexible schema for evolving actor states and round history
 - **Message Queue**: Inter-actor communication delivered in subsequent rounds
 
@@ -253,7 +258,7 @@ else:
 
 ### Problem
 - PyMongo (MongoDB) is synchronous
-- OpenAI client is synchronous
+- OpenRouter client (OpenAI-compatible) is synchronous
 - FastAPI event loop cannot block
 - Need concurrent actor processing
 
@@ -315,7 +320,7 @@ All engines follow consistent pattern:
 
 ```python
 response = openai.ChatCompletion.create(
-    model="gpt-4-turbo-preview",
+    model="anthropic/claude-sonnet-4.5",  # or gemini, qwen models
     messages=[
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt}
@@ -375,7 +380,7 @@ def parse_llm_json(response_text: str) -> dict:
 **Current Limits:**
 - 10 concurrent simulations (ThreadPool workers)
 - 15 actors max per simulation (prompt size)
-- ~1000 OpenAI requests/min (API rate limit)
+- ~1000 OpenRouter requests/min (API rate limit varies by model)
 
 **Bottlenecks:**
 1. LLM API rate limits

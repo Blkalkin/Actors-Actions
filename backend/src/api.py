@@ -26,11 +26,15 @@ from src.models import (
     WorldUpdate
 )
 
-# Initialize Weave for LLM observability
+# Initialize Weave for LLM observability (non-blocking)
 if WANDB_API_KEY:
-    os.environ["WANDB_API_KEY"] = WANDB_API_KEY
-    weave.init("actors-actions-simulation")
-    print("✅ Weave initialized for LLM observability")
+    try:
+        os.environ["WANDB_API_KEY"] = WANDB_API_KEY
+        weave.init("actors-actions-simulation")
+        print("✅ Weave initialized for LLM observability")
+    except Exception as e:
+        print(f"⚠️  Weave initialization failed: {e}")
+        print("   Application will continue without Weave tracing")
 else:
     print("⚠️  WANDB_API_KEY not found - Weave tracing disabled")
 
