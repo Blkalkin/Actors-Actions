@@ -8,6 +8,7 @@ import weave
 
 from src.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, ENRICHMENT_MODEL, ENRICHMENT_MAX_TOKENS
 from src.prompts import ACTOR_ENRICHMENT_SYSTEM, ACTOR_ENRICHMENT_USER
+from src.tools.tavily_search import search_for_actor_context
 
 MAX_RETRIES = 3
 
@@ -38,9 +39,18 @@ class ActorEnricher:
         identifier = actor.get('identifier', 'Unknown')
         print(f"🔍 Enriching actor: {identifier} using {self.model}...")
         
+        # Optional: Add real-time search context via Tavily
+        research_query = actor.get('research_query', '')
+        search_context = ""
+        if research_query:
+            tavily_results = search_for_actor_context(research_query, max_results=2)
+            if tavily_results:
+                search_context = f"\n\nReal-time web search results:\n{tavily_results}"
+                print(f"  ✅ Added Tavily search context")
+        
         user_prompt = ACTOR_ENRICHMENT_USER.format(
             identifier=identifier,
-            research_query=actor.get('research_query', ''),
+            research_query=actor.get('research_query', '') + search_context,
             role_in_simulation=actor.get('role_in_simulation', ''),
             granularity=actor.get('granularity', ''),
             scale_notes=actor.get('scale_notes', '')

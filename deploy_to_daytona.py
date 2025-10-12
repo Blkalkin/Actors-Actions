@@ -26,6 +26,7 @@ def main():
     openrouter_key = os.getenv("OPENROUTER_API_KEY")
     mongodb_uri = os.getenv("MONGODB_URI")
     wandb_key = os.getenv("WANDB_API_KEY")
+    tavily_key = os.getenv("TAVILY_API_KEY")
     
     if not daytona_key:
         print("❌ Error: Missing DAYTONA_API_KEY!")
@@ -66,6 +67,7 @@ def main():
             "uvicorn>=0.32.0",
             "pymongo>=4.10.0",
             "weave>=0.51.0",
+            "tavily-python>=0.3.0",
         ])
         .workdir("/home/daytona/actors-actions")
     )
@@ -78,6 +80,7 @@ def main():
                 "OPENROUTER_API_KEY": openrouter_key,
                 "MONGODB_URI": mongodb_uri,
                 "WANDB_API_KEY": wandb_key,
+                "TAVILY_API_KEY": tavily_key,
             },
             auto_stop_interval=0,  # Keep running indefinitely
             public=True,  # Make preview URLs publicly accessible

@@ -54,6 +54,9 @@ OPENROUTER_API_KEY=sk-or-v1-xxxxx      # Get from https://openrouter.ai/keys
 MONGODB_URI=mongodb+srv://...          # Get from https://cloud.mongodb.com
 WANDB_API_KEY=xxxxx                    # Get from https://wandb.ai/authorize (for Weave tracing)
 
+# Optional
+TAVILY_API_KEY=tvly-xxxxx              # Get from https://tavily.com (for real-time web search)
+
 # Optional (customize models)
 ACTOR_GENERATION_MODEL=anthropic/claude-sonnet-4.5
 ENRICHMENT_MODEL=google/gemini-2.0-flash-exp:free
