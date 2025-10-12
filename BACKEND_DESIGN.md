@@ -41,7 +41,7 @@ graph TB
 - **Async-First**: All I/O operations run in ThreadPoolExecutor to avoid blocking FastAPI event loop
 - **Multi-Model LLM**: Different specialized models via OpenRouter for optimal cost/performance:
   - **Claude Sonnet 4.5**: Actor generation & world processing (high reasoning)
-  - **Gemini 2.0 Flash**: Actor enrichment (fast, cost-effective)
+  - **Gemini 2.5 Flash**: Actor enrichment (fast, cost-effective)
   - **Qwen 2.5 72B**: Actor actions (efficient for repetitive tasks)
 - **MongoDB**: Flexible schema for evolving actor states and round history
 - **Message Queue**: Inter-actor communication delivered in subsequent rounds
