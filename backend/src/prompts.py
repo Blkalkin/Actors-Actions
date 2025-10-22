@@ -1,3 +1,5 @@
+import pydantic
+
 """All prompts for the simulation system."""
 
 # ============================================================================
