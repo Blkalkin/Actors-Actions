@@ -4,7 +4,6 @@ import uvicorn
 if __name__ == "__main__":
     print("🚀 Starting Actors-Actions API Server...")
     print("📝 API Documentation: http://localhost:8000/docs")
-    print("🔍 Alternative docs: http://localhost:8000/redoc")
     print("💚 Health check: http://localhost:8000/health")
     print("\n" + "="*80 + "\n")
     
